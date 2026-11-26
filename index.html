@@ -46,6 +46,17 @@
   .nm span{font-size:11.5px;color:var(--muted)}
   .lv{flex:none;font-size:12px;font-weight:700;background:var(--gold-soft);color:#7a5a12;border-radius:6px;padding:1px 7px}
   .off .nm b,.off .lv{color:var(--grey)} .off .lv{background:#eee}
+  .seg{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}
+  .seg button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:13px;color:var(--ink)}
+  .seg button[aria-pressed="true"]{background:var(--black);color:var(--gold);border-color:var(--black)}
+  .cus{list-style:none;margin:0;padding:0}
+  .cus>li{border-bottom:1px solid #f0ede5}
+  .cus .hd{width:100%;display:flex;gap:8px;align-items:center;padding:10px 4px;border:0;background:none;font:inherit;color:inherit;text-align:left}
+  .cus .hd .nm b{white-space:normal}
+  .badge{flex:none;font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 7px}
+  .badge.ok{background:#e0f4f0;color:#17705f} .badge.wait{background:#fdf1e3;color:#9a560b}
+  dl.kv{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:4px 10px;margin:0 4px 12px;padding:10px 12px;background:#faf8f3;border-radius:8px;font-size:13.5px}
+  dl.kv dt{color:var(--muted)} dl.kv dd{margin:0}
   .pdfs{list-style:none;margin:0;padding:0}
   .pdfs li button{width:100%;display:flex;justify-content:space-between;align-items:center;padding:12px 4px;border:0;border-bottom:1px solid #f0ede5;background:none;font:inherit;color:inherit;text-align:left}
   .pdfs li button::after{content:"開く ›";color:#7a5a12;font-size:13px;font-weight:600}
@@ -72,7 +83,8 @@
 </header>
 <nav class="tabs" id="tabs" hidden>
   <button type="button" data-tab="org" aria-selected="true">組織</button>
-  <button type="button" data-tab="pdf" aria-selected="false">コミッション明細</button>
+  <button type="button" data-tab="cus" aria-selected="false">お客様</button>
+  <button type="button" data-tab="pdf" aria-selected="false">明細</button>
 </nav>
 <main>
   <div id="loading" class="center"><div class="spin"></div>読み込み中…</div>
@@ -90,6 +102,19 @@
       <p class="muted">あなたと、あなたより下の代理店です。▸ を押すと下の代理店が開きます。灰色はサブスクのお支払いが確認できない方です。</p>
       <ul class="tree" id="tree"></ul>
       <p class="muted" id="asOf"></p>
+    </div>
+  </section>
+
+  <section id="cusView" hidden>
+    <div class="card">
+      <h2>お客様</h2>
+      <div class="seg" id="cusScope">
+        <button type="button" data-v="mine" aria-pressed="true">あなたが紹介</button>
+        <button type="button" data-v="all" aria-pressed="false">組織全体</button>
+      </div>
+      <div class="seg" id="cusKind"></div>
+      <p class="muted" id="cusNote"></p>
+      <ul class="cus" id="cusList"></ul>
     </div>
   </section>
 
@@ -117,7 +142,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var session = '', D = null, pdfCache = {}, pdfCode = '';
 
-  function show(id) { ['loading', 'error', 'orgView', 'pdfView'].forEach(function (x) { $(x).hidden = x !== id; }); }
+  function show(id) { ['loading', 'error', 'orgView', 'cusView', 'pdfView'].forEach(function (x) { $(x).hidden = x !== id; }); }
   function fail(msg) { $('errText').textContent = msg; $('tabs').hidden = true; show('error'); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
@@ -173,13 +198,51 @@
     call('orgLiteData', [session, this.value]).then(function (r) { if (!r.ok) return fail(r.message); render(r.data); }).catch(function (e) { fail('読み込めませんでした。時間をおいて開き直してください。（' + e.message + '）'); });
   });
 
+  /* ---------- お客様 ---------- */
+  var cus = { scope: 'mine', kind: 'done', open: -1 };
+  function usd(n) { return '$' + Number(n || 0).toLocaleString('en-US'); }
+  function nameOf(code) { var a = (D.agents || []).filter(function (x) { return x.code === code; })[0]; return a ? a.name + '（' + code + '）' : code; }
+  function waitState(k) { return k.app ? '決済待ち' : '番号待ち'; }
+  function renderCus() {
+    var all = (D.customers || []).filter(function (k) { return cus.scope === 'all' || k.intro === D.me; });
+    var done = all.filter(function (k) { return !!k.act; }), wait = all.filter(function (k) { return !k.act; });
+    $('cusKind').innerHTML = '<button type="button" data-v="done" aria-pressed="' + (cus.kind === 'done') + '">契約済み ' + done.length + '</button>' +
+      '<button type="button" data-v="wait" aria-pressed="' + (cus.kind === 'wait') + '">手続き中 ' + wait.length + '</button>';
+    Array.prototype.forEach.call($('cusScope').children, function (b) { b.setAttribute('aria-pressed', b.dataset.v === cus.scope); });
+    var list = cus.kind === 'done' ? done : wait;
+    if (cus.kind === 'done') list.sort(function (a, b) { return String(b.act).localeCompare(String(a.act)) || String(b.req).localeCompare(String(a.req)); });
+    else list.sort(function (a, b) { return String(b.req).localeCompare(String(a.req)); });
+    $('cusNote').textContent = cus.kind === 'done' ? '初回の決済が新しい順です。名前を押すと詳しく出ます。' : '手続き中：番号待ち＝本申込の前、決済待ち＝本申込済み。申込みが新しい順です。';
+    $('cusList').innerHTML = list.length ? list.map(function (k, i) {
+      var sub = (cus.scope === 'all' && k.intro !== D.me ? '紹介 ' + esc(nameOf(k.intro)) + '　' : '') + usd(k.amount) + '／' + esc(k.years) + '年' +
+        (k.act ? '　初回の決済 ' + esc(k.act) : '　申込み ' + esc(k.req || '—'));
+      var h = '<li><button type="button" class="hd" data-i="' + i + '"><div class="nm"><b>' + esc(k.name) + '</b><span>' + sub + '</span></div>' +
+        (k.act ? '<span class="badge ok">契約済み</span>' : '<span class="badge wait">' + waitState(k) + '</span>') + '</button>';
+      if (cus.open === i) h += '<dl class="kv">' +
+        '<dt>内容</dt><dd>' + usd(k.amount) + '／' + esc(k.years) + '年／' + esc(k.pay || '—') + '</dd>' +
+        '<dt>申込み</dt><dd>' + esc(k.req || '—') + '</dd>' +
+        '<dt>本申込</dt><dd>' + esc(k.app || 'まだ') + '</dd>' +
+        '<dt>初回の決済</dt><dd>' + esc(k.act || 'まだ') + '</dd>' +
+        '<dt>実績月</dt><dd>' + esc(k.month || '—') + '</dd>' +
+        '<dt>ポイント</dt><dd>' + (Math.round((k.point || 0) * 10) / 10) + 'P</dd>' +
+        '<dt>紹介者</dt><dd>' + esc(nameOf(k.intro)) + '</dd>' +
+        (k.adv ? '<dt>アドバイザー</dt><dd>' + esc(nameOf(k.adv)) + '</dd>' : '') + '</dl>';
+      return h + '</li>';
+    }).join('') : '<li class="center">' + (cus.kind === 'done' ? '契約はまだありません。' : '手続き中のお客様はいません。') + '</li>';
+    cus.list = list;
+  }
+  $('cusScope').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { cus.scope = b.dataset.v; cus.open = -1; renderCus(); } });
+  $('cusKind').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { cus.kind = b.dataset.v; cus.open = -1; renderCus(); } });
+  $('cusList').addEventListener('click', function (e) { var b = e.target.closest('.hd'); if (b) { var i = Number(b.dataset.i); cus.open = cus.open === i ? -1 : i; renderCus(); } });
+
   /* ---------- タブ ---------- */
-  var currentTab = 'org';
+  var currentTab = /^#(org|cus|pdf)$/.test(location.hash) ? location.hash.slice(1) : 'org'; // #cus などで最初のタブを選べる
   function tab(name) {
     currentTab = name;
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.setAttribute('aria-selected', b.dataset.tab === name); });
-    show(name === 'org' ? 'orgView' : 'pdfView');
+    show(name + 'View');
     if (name === 'pdf') loadPdfs();
+    if (name === 'cus') renderCus();
     window.scrollTo(0, 0);
   }
   $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
@@ -290,7 +353,12 @@
       { code: 'Z-004', name: '高橋美咲', parent: 'Z-002', level: '1', pt: 2, direct: 0, subsc: true, contracts: 2 },
       { code: 'Z-005', name: '田中健', parent: 'Z-002', level: '1', pt: 0, direct: 0, subsc: true, contracts: 0 }
     ];
-    return { ok: true, token: 'sample', data: { me: 'Z-001', codes: ['Z-001'], agents: a, asOf: '2026/11/26 10:00' } };
+    var c = [
+      { name: '青木 由美', intro: 'Z-001', adv: 'Z-001', amount: 300, years: 20, pay: '毎月', req: '2026/09/02', app: '2026/09/10', act: '2026/09/25', month: '2026年9月', point: 1.5 },
+      { name: '石井 誠', intro: 'Z-001', adv: '', amount: 200, years: 15, pay: '毎月', req: '2026/11/10', app: '', act: '', month: '', point: 0 },
+      { name: '上田 恵', intro: 'Z-002', adv: 'Z-001', amount: 500, years: 25, pay: '年一回', req: '2026/08/01', app: '2026/08/05', act: '2026/08/20', month: '2026年8月', point: 2.5 }
+    ];
+    return { ok: true, token: 'sample', data: { me: 'Z-001', codes: ['Z-001'], agents: a, customers: c, asOf: '2026/11/26 10:00' } };
   }
 
   start();

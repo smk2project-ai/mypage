@@ -339,6 +339,10 @@
         if (!r.ok) return fail(r.message);
         session = r.token;
         render(r.data);
+        // 全員分のデータが古いときは、裏で作り直してから表示し直す
+        if (r.data.stale) call('orgWarm', [session])
+          .then(function () { return call('orgLiteData', [session, r.data.me]); })
+          .then(function (x) { if (x && x.ok) render(x.data); }).catch(function () {});
       });
     }).catch(function (e) { fail('開けませんでした。時間をおいてもう一度お試しください。（' + e.message + '）'); });
   }

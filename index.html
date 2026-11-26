@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#0b0b0b">
+<title>マイページ</title>
+<!--
+  代理店マイページ（かんたん版）2026-11-26
+  公式LINE「代理店サポート」のリッチメニュー（マイページ）から LIFF で開く。LINE ID で本人を確かめ、組織とコミッション明細PDFを見せる。
+  サーバー：MK2/gas/org/Mypage.js（組織管理と同じ GAS。orgLineLogin / orgLiteData / orgLitePdfs / orgLitePdf）
+  file:// か ?sample で開くと見本データで動く。
+-->
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --bg:#f6f4ee; --card:#fff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e3dfd4;
+    --black:#0b0b0b; --gold:#c9a24a; --gold-soft:#f6eed9; --grey:#9a9aa0; --red:#b3403a;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html{overflow-x:hidden}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Noto Sans JP",system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
+  header{background:var(--black);color:var(--gold);padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:18px;letter-spacing:.06em}
+  header .who{color:#fff;font-size:13px;margin-top:2px;opacity:.9}
+  header select{margin-top:8px;font-size:16px;padding:4px 8px;border-radius:6px;border:1px solid var(--gold);background:#1a1a1a;color:#fff}
+  .tabs{display:flex;background:var(--black);border-top:1px solid #222}
+  .tabs button{flex:1 1 0;padding:10px 0;border:0;background:none;color:#bbb;font:inherit;font-weight:600;border-bottom:3px solid transparent}
+  .tabs button[aria-selected="true"]{color:var(--gold);border-bottom-color:var(--gold)}
+  main{max-width:720px;margin:0 auto;padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .hero{background:var(--black);color:#fff;border:0}
+  .hero .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+  .hero .n{font-size:22px;font-weight:700;color:var(--gold);line-height:1.2}
+  .hero .l{font-size:11px;color:#ccc}
+  h2{font-size:15px;margin:0 0 8px}
+  .muted{color:var(--muted);font-size:12.5px}
+  .tree{list-style:none;margin:0;padding:0}
+  .tree ul{list-style:none;margin:0;padding-left:14px;border-left:1px dashed var(--line);margin-left:9px}
+  .row{display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid #f0ede5;min-width:0}
+  .tg{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);background:#fff;font-size:12px;line-height:18px;text-align:center;color:var(--muted);padding:0}
+  .tg.empty{visibility:hidden}
+  .nm{flex:1 1 auto;min-width:0}
+  .nm b{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .nm span{font-size:11.5px;color:var(--muted)}
+  .lv{flex:none;font-size:12px;font-weight:700;background:var(--gold-soft);color:#7a5a12;border-radius:6px;padding:1px 7px}
+  .off .nm b,.off .lv{color:var(--grey)} .off .lv{background:#eee}
+  .pdfs{list-style:none;margin:0;padding:0}
+  .pdfs li button{width:100%;display:flex;justify-content:space-between;align-items:center;padding:12px 4px;border:0;border-bottom:1px solid #f0ede5;background:none;font:inherit;color:inherit;text-align:left}
+  .pdfs li button::after{content:"開く ›";color:#7a5a12;font-size:13px;font-weight:600}
+  .viewer{position:fixed;inset:0;background:#2b2b2b;z-index:20;display:flex;flex-direction:column}
+  .viewer .bar{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--black);color:#fff}
+  .viewer .bar b{flex:1;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .viewer .bar button,.viewer .bar a{border:1px solid var(--gold);color:var(--gold);background:none;border-radius:8px;padding:5px 12px;font:inherit;font-size:13px;text-decoration:none}
+  .pages{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:10px}
+  .pages canvas{display:block;width:100%;height:auto;margin:0 auto 10px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .center{text-align:center;padding:40px 16px;color:var(--muted)}
+  .err{color:var(--red);font-weight:600}
+  .btn{display:inline-block;margin-top:12px;border:1px solid var(--black);border-radius:8px;padding:8px 16px;color:var(--black);text-decoration:none;font-weight:600;background:#fff}
+  .spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--gold);border-radius:50%;margin:0 auto 10px;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .sample{background:#fff3d4;color:#8a5c00;font-size:12px;text-align:center;padding:4px}
+</style>
+</head>
+<body>
+<div class="sample" id="sampleBar" hidden>見本データで表示中</div>
+<header>
+  <h1>マイページ</h1>
+  <div class="who" id="who"></div>
+  <select id="codeSel" hidden aria-label="代理店コードの切り替え"></select>
+</header>
+<nav class="tabs" id="tabs" hidden>
+  <button type="button" data-tab="org" aria-selected="true">組織</button>
+  <button type="button" data-tab="pdf" aria-selected="false">コミッション明細</button>
+</nav>
+<main>
+  <div id="loading" class="center"><div class="spin"></div>読み込み中…</div>
+  <div id="error" class="center" hidden><p class="err" id="errText"></p><a class="btn" href="https://line.me/R/ti/p/@904knxqb">代理店サポートを開く</a></div>
+
+  <section id="orgView" hidden>
+    <div class="card hero"><div class="grid">
+      <div><div class="n" id="sLv">-</div><div class="l">レベル</div></div>
+      <div><div class="n" id="sPt">-</div><div class="l">累積ポイント</div></div>
+      <div><div class="n" id="sDirect">-</div><div class="l">直紹介</div></div>
+      <div><div class="n" id="sCount">-</div><div class="l">組織の人数</div></div>
+    </div></div>
+    <div class="card">
+      <h2>組織</h2>
+      <p class="muted">あなたと、あなたより下の代理店です。▸ を押すと下の代理店が開きます。灰色はサブスクのお支払いが確認できない方です。</p>
+      <ul class="tree" id="tree"></ul>
+      <p class="muted" id="asOf"></p>
+    </div>
+  </section>
+
+  <section id="pdfView" hidden>
+    <div class="card">
+      <h2>コミッション明細（PDF）</h2>
+      <p class="muted">月を押すと明細が開きます。</p>
+      <ul class="pdfs" id="pdfList"></ul>
+      <div id="pdfMsg" class="center" hidden></div>
+    </div>
+  </section>
+</main>
+
+<div class="viewer" id="viewer" hidden>
+  <div class="bar"><b id="vTitle"></b><a id="vSave" download hidden>保存</a><button type="button" id="vClose">閉じる</button></div>
+  <div class="pages" id="pages"></div>
+</div>
+
+<script>
+(function () {
+  var LIFF_ID = ''; // LIFF「代理店マイページ」の ID（作成後に入れる）
+  var API = 'https://script.google.com/macros/s/AKfycbwyc_V9ne9NUuGtLDPJpf5fEPTEzb8sRDJNuzt-3QaBPgZjnj3IiAjo3Rhuxj_XxMg-/exec';
+  var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  var SAMPLE = location.protocol === 'file:' || /[?&]sample\b/.test(location.search);
+  var $ = function (id) { return document.getElementById(id); };
+  var session = '', D = null, pdfCache = {}, pdfCode = '';
+
+  function show(id) { ['loading', 'error', 'orgView', 'pdfView'].forEach(function (x) { $(x).hidden = x !== id; }); }
+  function fail(msg) { $('errText').textContent = msg; $('tabs').hidden = true; show('error'); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  function call(fn, args) {
+    if (SAMPLE) return Promise.resolve(sample(fn, args));
+    return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) throw new Error(j.error || 'エラー'); return j.result; });
+  }
+
+  /* ---------- 組織 ---------- */
+  function render(data) {
+    D = data;
+    var me = data.agents[0];
+    $('who').textContent = me.code + '　' + me.name + ' さん';
+    var sel = $('codeSel');
+    sel.hidden = data.codes.length < 2;
+    sel.innerHTML = data.codes.map(function (c) { return '<option value="' + esc(c) + '"' + (c === data.me ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+    $('sLv').textContent = 'Lv' + me.level;
+    $('sPt').textContent = Math.round(me.pt * 10) / 10;
+    $('sDirect').textContent = me.direct;
+    $('sCount').textContent = data.agents.length - 1;
+    $('asOf').textContent = data.asOf ? data.asOf + ' 時点' : '';
+    var kids = {};
+    data.agents.forEach(function (a) { if (a.parent) (kids[a.parent] = kids[a.parent] || []).push(a); });
+    function node(a, depth) {
+      var ch = kids[a.code] || [];
+      var open = depth < 1;
+      var li = '<li><div class="row' + (a.subsc ? '' : ' off') + '">' +
+        '<button type="button" class="tg' + (ch.length ? '' : ' empty') + '" aria-expanded="' + open + '">' + (open ? '▾' : '▸') + '</button>' +
+        '<div class="nm"><b>' + esc(a.name) + '</b><span>' + esc(a.code) + (ch.length ? '　下に' + countAll(a.code) + '人' : '') + (a.contracts ? '　紹介した契約 ' + a.contracts + '件' : '') + '</span></div>' +
+        '<span class="lv">Lv' + esc(a.level) + '</span></div>';
+      if (ch.length) li += '<ul' + (open ? '' : ' hidden') + '>' + ch.map(function (k) { return node(k, depth + 1); }).join('') + '</ul>';
+      return li + '</li>';
+    }
+    function countAll(code) { var n = 0; (kids[code] || []).forEach(function (k) { n += 1 + countAll(k.code); }); return n; }
+    $('tree').innerHTML = node(me, 0);
+    $('tabs').hidden = false;
+    pdfCode = '';
+    tab(currentTab);
+  }
+  $('tree').addEventListener('click', function (e) {
+    var b = e.target.closest('.tg');
+    if (!b || b.classList.contains('empty')) return;
+    var ul = b.closest('li').querySelector(':scope > ul');
+    var open = ul.hidden;
+    ul.hidden = !open;
+    b.textContent = open ? '▾' : '▸';
+    b.setAttribute('aria-expanded', open);
+  });
+  $('codeSel').addEventListener('change', function () {
+    show('loading');
+    call('orgLiteData', [session, this.value]).then(function (r) { if (!r.ok) return fail(r.message); render(r.data); }).catch(function (e) { fail('読み込めませんでした。時間をおいて開き直してください。（' + e.message + '）'); });
+  });
+
+  /* ---------- タブ ---------- */
+  var currentTab = 'org';
+  function tab(name) {
+    currentTab = name;
+    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.setAttribute('aria-selected', b.dataset.tab === name); });
+    show(name === 'org' ? 'orgView' : 'pdfView');
+    if (name === 'pdf') loadPdfs();
+    window.scrollTo(0, 0);
+  }
+  $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) tab(b.dataset.tab); });
+
+  /* ---------- 明細PDF ---------- */
+  function loadPdfs() {
+    if (pdfCode === D.me) return;
+    pdfCode = D.me;
+    $('pdfList').innerHTML = '';
+    $('pdfMsg').hidden = false;
+    $('pdfMsg').innerHTML = '<div class="spin"></div>明細を探しています…';
+    call('orgLitePdfs', [session, D.me]).then(function (r) {
+      if (!r.ok) { $('pdfMsg').innerHTML = '<span class="err">' + esc(r.message) + '</span>'; return; }
+      if (!r.list.length) { $('pdfMsg').textContent = 'まだ明細はありません。'; return; }
+      $('pdfMsg').hidden = true;
+      $('pdfList').innerHTML = r.list.map(function (p) { return '<li><button type="button" data-id="' + esc(p.id) + '" data-label="' + esc(p.label) + '">' + esc(p.label) + '分</button></li>'; }).join('');
+    }).catch(function (e) { pdfCode = ''; $('pdfMsg').innerHTML = '<span class="err">読み込めませんでした（' + esc(e.message) + '）</span>'; });
+  }
+  $('pdfList').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (b) openPdf(b.dataset.id, b.dataset.label);
+  });
+
+  var pdfjsReady = null;
+  function loadPdfJs() {
+    if (pdfjsReady) return pdfjsReady;
+    pdfjsReady = new Promise(function (ok, ng) {
+      var s = document.createElement('script');
+      s.src = PDFJS + 'pdf.min.js';
+      s.onload = function () { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+      s.onerror = function () { pdfjsReady = null; ng(new Error('表示の準備ができませんでした')); };
+      document.head.appendChild(s);
+    });
+    return pdfjsReady;
+  }
+  function openPdf(id, label) {
+    $('vTitle').textContent = label + '分 コミッション明細';
+    $('pages').innerHTML = '<div class="center" style="color:#ddd"><div class="spin"></div>開いています…</div>';
+    $('vSave').hidden = true;
+    $('viewer').hidden = false;
+    document.body.style.overflow = 'hidden';
+    var got = pdfCache[id] ? Promise.resolve(pdfCache[id]) : call('orgLitePdf', [session, D.me, id]).then(function (r) {
+      if (!r.ok) throw new Error(r.message);
+      return (pdfCache[id] = r);
+    });
+    Promise.all([got, loadPdfJs()]).then(function (x) {
+      var r = x[0], lib = x[1];
+      var bin = atob(r.b64), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      try {
+        var url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        $('vSave').href = url; $('vSave').setAttribute('download', r.name || 'meisai.pdf'); $('vSave').hidden = false;
+      } catch (e) { /* 保存できない端末は表示だけ */ }
+      return lib.getDocument({ data: bytes }).promise.then(function (doc) {
+        $('pages').innerHTML = '';
+        var chain = Promise.resolve();
+        for (var p = 1; p <= doc.numPages; p++) (function (n) {
+          chain = chain.then(function () { return doc.getPage(n); }).then(function (page) {
+            var w = Math.min($('pages').clientWidth - 20, 900);
+            var base = page.getViewport({ scale: 1 });
+            var ratio = window.devicePixelRatio || 1;
+            var vp = page.getViewport({ scale: (w / base.width) * ratio });
+            var c = document.createElement('canvas');
+            c.width = vp.width; c.height = vp.height;
+            $('pages').appendChild(c);
+            return page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+          });
+        })(p);
+        return chain;
+      });
+    }).catch(function (e) {
+      $('pages').innerHTML = '<div class="center" style="color:#fbb">' + esc(e.message || '開けませんでした') + '</div>';
+    });
+  }
+  $('vClose').addEventListener('click', function () { $('viewer').hidden = true; document.body.style.overflow = ''; });
+
+  /* ---------- はじまり ---------- */
+  function start() {
+    if (SAMPLE) {
+      $('sampleBar').hidden = false;
+      return call('orgLineLogin', ['', '']).then(function (r) { session = 'sample'; render(r.data); });
+    }
+    if (!LIFF_ID) return fail('準備中です。');
+    return liff.init({ liffId: LIFF_ID }).then(function () {
+      if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.href }); return; }
+      return call('orgLineLogin', [liff.getIDToken(), '']).then(function (r) {
+        if (!r.ok && r.relogin && !sessionStorage.getItem('mp_relogin')) {
+          // IDトークンの期限切れ：1回だけログインし直す
+          sessionStorage.setItem('mp_relogin', '1');
+          liff.logout(); liff.login({ redirectUri: location.href }); return;
+        }
+        sessionStorage.removeItem('mp_relogin');
+        if (!r.ok) return fail(r.message);
+        session = r.token;
+        render(r.data);
+      });
+    }).catch(function (e) { fail('開けませんでした。時間をおいてもう一度お試しください。（' + e.message + '）'); });
+  }
+
+  /* ---------- 見本データ ---------- */
+  function sample(fn, args) {
+    if (fn === 'orgLitePdfs') return { ok: true, list: [{ ym: '202611', label: '2026年11月', id: 's1' }, { ym: '202610', label: '2026年10月', id: 's2' }, { ym: '202609', label: '2026年9月', id: 's3' }] };
+    if (fn === 'orgLitePdf') return { ok: false, message: '見本データではPDFは開けません。' };
+    var a = [
+      { code: 'Z-001', name: '山田太郎', parent: '', level: '4', pt: 38.5, direct: 5, subsc: true, contracts: 6 },
+      { code: 'Z-002', name: '佐藤花子', parent: 'Z-001', level: '2', pt: 7, direct: 2, subsc: true, contracts: 3 },
+      { code: 'Z-003', name: '鈴木一郎', parent: 'Z-001', level: '1', pt: 1.5, direct: 0, subsc: false, contracts: 1 },
+      { code: 'Z-004', name: '高橋美咲', parent: 'Z-002', level: '1', pt: 2, direct: 0, subsc: true, contracts: 2 },
+      { code: 'Z-005', name: '田中健', parent: 'Z-002', level: '1', pt: 0, direct: 0, subsc: true, contracts: 0 }
+    ];
+    return { ok: true, token: 'sample', data: { me: 'Z-001', codes: ['Z-001'], agents: a, asOf: '2026/11/26 10:00' } };
+  }
+
+  start();
+})();
+</script>
+</body>
+</html>

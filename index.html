@@ -223,6 +223,7 @@
         '<dt>申込み</dt><dd>' + esc(k.req || '—') + '</dd>' +
         '<dt>本申込</dt><dd>' + esc(k.app || 'まだ') + '</dd>' +
         '<dt>初回の決済</dt><dd>' + esc(k.act || 'まだ') + '</dd>' +
+        (k.act ? '<dt>最終決済</dt><dd>' + esc(k.last || '—') + '</dd>' : '') +
         '<dt>実績月</dt><dd>' + esc(k.month || '—') + '</dd>' +
         '<dt>ポイント</dt><dd>' + (Math.round((k.point || 0) * 10) / 10) + 'P</dd>' +
         '<dt>紹介者</dt><dd>' + esc(nameOf(k.intro)) + '</dd>' +
@@ -354,9 +355,9 @@
       { code: 'Z-005', name: '田中健', parent: 'Z-002', level: '1', pt: 0, direct: 0, subsc: true, contracts: 0 }
     ];
     var c = [
-      { name: '青木 由美', intro: 'Z-001', adv: 'Z-001', amount: 300, years: 20, pay: '毎月', req: '2026/09/02', app: '2026/09/10', act: '2026/09/25', month: '2026年9月', point: 1.5 },
+      { name: '青木 由美', intro: 'Z-001', adv: 'Z-001', amount: 300, years: 20, pay: '毎月', req: '2026/09/02', app: '2026/09/10', act: '2026/09/25', last: '2026/11/25', month: '2026年9月', point: 1.5 },
       { name: '石井 誠', intro: 'Z-001', adv: '', amount: 200, years: 15, pay: '毎月', req: '2026/11/10', app: '', act: '', month: '', point: 0 },
-      { name: '上田 恵', intro: 'Z-002', adv: 'Z-001', amount: 500, years: 25, pay: '年一回', req: '2026/08/01', app: '2026/08/05', act: '2026/08/20', month: '2026年8月', point: 2.5 }
+      { name: '上田 恵', intro: 'Z-002', adv: 'Z-001', amount: 500, years: 25, pay: '年一回', req: '2026/08/01', app: '2026/08/05', act: '2026/08/20', last: '2026/08/20', month: '2026年8月', point: 2.5 }
     ];
     return { ok: true, token: 'sample', data: { me: 'Z-001', codes: ['Z-001'], agents: a, customers: c, asOf: '2026/11/26 10:00' } };
   }
